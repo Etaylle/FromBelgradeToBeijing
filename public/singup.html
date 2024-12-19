@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Silkyway - Register</title>
+    <link rel="stylesheet" href="styles/login.css">
+</head>
+
+<body>
+    <div class="background-image"></div>
+    <div class="form_container">
+        <form class="login-form" onsubmit="register(event)">
+            <div class="bg-image-2"></div>
+            <h2>Register</h2>
+            <input type="text" id="id" placeholder="ID" required>
+            <input type="text" id="firstname" placeholder="First Name" required>
+            <input type="text" id="lastname" placeholder="Last Name" required>
+            <input type="email" id="email" placeholder="Email" required>
+            <input type="password" id="password" placeholder="Password" required minlength="6">
+            <input type="text" id="address" placeholder="Address" required>
+            <button type="submit">Register</button>
+            <p id="register-status"></p>
+            <p><a href="index.html">Back to Home</a></p>
+        </form>
+    </div>
+    <script defer src="scripts/index.js"></script>
+</body>
+
+</html>
