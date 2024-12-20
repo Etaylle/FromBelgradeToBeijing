@@ -1,9 +1,9 @@
 // models/user.js (or wherever your user model is)
-const { Sequelize, DataTypes } = require('sequelize');
-const sequelize = require('../db'); // Make sure you're using the correct Sequelize instance.
+const { sequelize } = require('../config/db'); // Import the sequelize instance from db.js
+const { DataTypes } = require('sequelize'); // Make sure you're using the correct Sequelize instance.
 
 const User = sequelize.define('User', {
-  id: { 
+  user_id: { 
     type: DataTypes.INTEGER, 
     primaryKey: true, 
     autoIncrement: true 
@@ -23,16 +23,16 @@ const User = sequelize.define('User', {
     allowNull: false 
   },
   role: { 
-    type: DataTypes.STRING, 
+    type: DataTypes.ENUM('customer', 'admin'),
     defaultValue: 'customer' 
   },
   firstname: { 
     type: DataTypes.STRING, 
-    allowNull: false 
+    allowNull: true 
   },
   lastname: { 
     type: DataTypes.STRING, 
-    allowNull: false 
+    allowNull: true 
   },
   credits: { 
     type: DataTypes.INTEGER, 
@@ -40,7 +40,9 @@ const User = sequelize.define('User', {
   },
 }, {
   tableName: 'users', // Make sure to match the actual table name.
-  timestamps: true, // If your table includes createdAt and updatedAt columns.
+  timestamps: true,
+  createdAt: 'created_at', // Map Sequelize's `createdAt` to your DB's `created_at`
+  updatedAt: false, 
 });
 
 module.exports = User;

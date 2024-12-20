@@ -12,8 +12,8 @@ const validateUserInput = require("./api/middleware/validation"); // Validation 
 const authenticateSession = require("./api/middleware/authenticateSession"); // Authentication Middleware
 const errorHandler = require("./api/middleware/errorHandler"); // Central Error Handler
 const { getAllProducts } = require("./api/controllers/product.controller"); // Product Controller
-
 const app = express();
+const User = require('./api/models/user.model'); 
 
 // Session store
 const sessionStore = new SequelizeStore({
@@ -59,37 +59,30 @@ const router = express.Router();
 
 // AUTH Routes
 router.post("/auth/register", validateUserInput, async (req, res, next) => {
-  console.log("Register endpoint hit"); // Debugging line to check if route is being reached
   try {
     const { username, firstname, lastname, email, password } = req.body;
-    console.log("Received Data:", { username, firstname, lastname, email, password });
 
-    // Check if email or username already exists
-    const existingUser = await User.findOne({ where: { email } });
-    if (existingUser) {
-      return res.status(400).json({ message: 'Email is already in use' });
+    const [existingUser, existingUsername] = await Promise.all([
+      User.findOne({ where: { email } }),
+      User.findOne({ where: { username } }),
+    ]);
+
+    if (existingUser || existingUsername) {
+      return res.status(400).json({ message: 'Email or username is already in use' });
     }
 
-    const existingUsername = await User.findOne({ where: { username } });
-    if (existingUsername) {
-      return res.status(400).json({ message: 'Username is already in use' });
-    }
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Hash the password
-    const hashedPassword = bcrypt.hashSync(password, 10);
-
-    // Create the new user in the database using Sequelize
     const newUser = await User.create({
       username,
       email,
       password_hash: hashedPassword,
       firstname,
       lastname,
-      credits: 0,  // Default credits
-      role: 'customer',  // Default role
+      credits: 0,
+      role: 'customer',
     });
 
-    // Send success response
     res.status(201).json({
       message: 'User registered successfully',
       user: {
@@ -98,17 +91,10 @@ router.post("/auth/register", validateUserInput, async (req, res, next) => {
         email: newUser.email,
         firstname: newUser.firstname,
         lastname: newUser.lastname,
-        credits: newUser.credits,
-        role: newUser.role,
       },
     });
   } catch (err) {
-    console.error("Error during registration:", err);
-    if (err.name === "SequelizeUniqueConstraintError") {
-      res.status(400).json({ message: "Email or Username already exists" });
-    } else {
-      next(err); // Pass error to central error handler
-    }
+    next(err);
   }
 });
 
