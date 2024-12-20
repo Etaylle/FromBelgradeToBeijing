@@ -24,9 +24,11 @@ const closeRegister = (e) => {
   const registerContainer = document.querySelector("#register");
   registerContainer.style.display = "none";
 };
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   //currentUser = JSON.parse(localStorage.getItem("currentUser"));
   //token = localStorage.getItem("token");
+  const currentUser = await fetchCurrentUser();
+
 
   fetchProducts();
   displayUserInfo();
@@ -94,17 +96,26 @@ document.addEventListener("DOMContentLoaded", () => {
   const loginCloseBtn = document.querySelector(".close-login");
   loginCloseBtn.addEventListener("click", closeLogin);
 });
-
 async function fetchCurrentUser() {
-  const response = await fetch("http://localhost:8080/api/auth/currentUser");
-  if (response.ok) {
-    const user = await response.json();
-    return user;
-  } else {
-    console.error("Failed to fetch current user:", response.statusText);
+  try {
+    const response = await fetch("http://localhost:8080/api/auth/currentUser", {
+      method: "GET",
+      credentials: "include", // Include cookies
+    });
+
+    if (response.ok) {
+      const user = await response.json();
+      return user;
+    } else {
+      console.error("Failed to fetch current user:", response.statusText);
+      return null;
+    }
+  } catch (error) {
+    console.error("Error fetching current user:", error);
     return null;
   }
 }
+
 async function checkout() {
   const total = Object.values(cart).reduce((sum, product) => sum + product.price * product.quantity, 0);
 
@@ -149,7 +160,7 @@ async function checkout() {
 }
 
 
-/*async function displayUserAvatar() {
+async function displayUserAvatar() {
 if (!user || !user.firstname) {
         console.error('User data is missing or invalid');
         return;
@@ -165,7 +176,7 @@ if (!user || !user.firstname) {
   const img = document.createElement('img');
   img.src = avatarUrl;  
   userAvatarDisplay.appendChild(img);
-}*/
+}
 async function fetchProducts() {
   try {
     const response = await fetch("http://localhost:8080/api/products");
@@ -184,6 +195,24 @@ async function fetchProducts() {
   }
 }
 
+/*async function fetchProducts() {
+  try {
+    const response = await fetch("http://localhost:8080/api/products");
+    products = await response.json();
+
+    // Update product stocks
+    products.forEach((product) => {
+      productStocks[product._id] = product.stock;
+      // Map the image path to the correct public URL
+      product.images = product.images.map(image => `/images/${image}`);
+    });
+
+    displayProducts(products);
+  } catch (error) {
+    console.error("Error fetching products:", error);
+  }
+}*/
+
 function displayProducts(products) {
   const gridContainer = document.querySelector(".grid-container");
   gridContainer.innerHTML = "";
@@ -198,6 +227,13 @@ function displayProducts(products) {
         ${product.name} - <span class="price-span">SilkyDinars:${product.price} - Q:${productStocks[product._id]}</span>
       </div>
     `;
+   /* gridItem.innerHTML = `
+  <img src="${product.images[0]}" alt="${product.name}">
+  <div class="overlay">
+    ${product.name} - <span class="price-span">SilkyDinars: ${product.price} - Q: ${productStocks[product._id]}</span>
+  </div>
+`;*/
+
     const addToCartButton = document.createElement("button");
     addToCartButton.textContent = "+";
     gridItem.appendChild(addToCartButton);

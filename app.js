@@ -9,11 +9,13 @@ const swaggerDoc = require("./swagger.json");
 const bcrypt = require("bcrypt");
 const { QueryTypes } = require("sequelize");
 const validateUserInput = require("./api/middleware/validation"); // Validation Middleware
-const authenticateSession = require("./api/middleware/authenticateSession"); // Authentication Middleware
+//const {authenticateSession, populateUser} = require("./api/middleware/authenticateSession"); // Authentication Middleware
 const errorHandler = require("./api/middleware/errorHandler"); // Central Error Handler
 const { getAllProducts } = require("./api/controllers/product.controller"); // Product Controller
 const app = express();
 const User = require('./api/models/user.model'); 
+const path = require('path');
+
 
 // Session store
 const sessionStore = new SequelizeStore({
@@ -25,19 +27,27 @@ app.use(express.json());
 app.use(cors());
 app.use(express.static("./public"));
 
+// Serve static files
+app.use('/images', express.static(path.join(__dirname, 'public/images')));
+app.use(express.static(path.join(__dirname, 'public')));
+
 // Configure session middleware
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "your-secret-key",
     store: sessionStore,
-    resave: false,
-    saveUninitialized: false,
+    resave: false, // Do not save session if it hasn't changed
+    saveUninitialized: false, // Do not create session until something is stored
     cookie: {
-      maxAge: 24 * 60 * 60 * 1000, // 1 day
-      secure: process.env.NODE_ENV === "production", // Use secure cookies in production
+      httpOnly: true,
+      secure: false, // Keep false for school project over HTTP
+      maxAge: 86400000, // 1 day
     },
   })
 );
+app.use('/images', express.static(path.join(__dirname, 'public/images')));
+
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Sync database and session store
 (async () => {
@@ -51,6 +61,69 @@ app.use(
   }
 })();
 
+const { Product } = require('./api/models/product.model'); // Make sure your Sequelize model is correctly imported
+
+/*app.get('/api/products', async (req, res) => {
+  try {
+    // Fetch all products using Sequelize
+    const products = await Product.findAll(); // Assuming 'Product' is your Sequelize model
+
+    // Map the products to process image URLs
+    const mappedProducts = products.map(product => {
+      let imageUrls;
+
+      if (product.image_url) {
+        // Handle multiple or single URLs
+        imageUrls = product.image_url.includes(',')
+          ? product.image_url.split(',').map(url => url.trim()) // Split and clean
+          : [product.image_url]; // Wrap single URL in an array
+      } else {
+        imageUrls = []; // Default to an empty array if no URLs
+      }
+
+      return {
+        ...product.toJSON(), // Convert Sequelize model instance to plain object
+        images: imageUrls.map(image => `/images/${image}`), // Prefix static path
+      };
+    });
+
+    res.json(mappedProducts); // Send the processed products
+  } catch (error) {
+    console.error('Error fetching products:', error);
+    res.status(500).send('Error fetching products');
+  }
+});
+
+app.get('/api/products', async (req, res) => {
+  try {
+    console.log('Fetching products from the database...');
+    const [products] = await db.query('SELECT * FROM products', { type: QueryTypes.SELECT });
+
+    const mappedProducts = products.map(product => {
+      let imageUrls;
+      if (product.image_url) {
+        // Check if the image_url contains multiple URLs
+        imageUrls = product.image_url.includes(',')
+          ? product.image_url.split(',').map(url => url.trim()) // Split and trim
+          : [product.image_url]; // Single URL
+      } else {
+        imageUrls = []; 
+      }
+
+      return {
+        ...product,
+        images: imageUrls.map(image => `/images/${image}`), // Map URLs to static path
+      };
+    });
+
+    res.json(mappedProducts);
+  } catch (error) {
+    console.error("Error fetching products:", error);
+    res.status(500).send("Error fetching products");
+  }
+});
+
+*/
 // Swagger Documentation
 app.use("/swagger", swaggerUi.serve, swaggerUi.setup(swaggerDoc));
 
@@ -58,7 +131,7 @@ app.use("/swagger", swaggerUi.serve, swaggerUi.setup(swaggerDoc));
 const router = express.Router();
 
 // AUTH Routes
-router.post("/auth/register", validateUserInput, async (req, res, next) => {
+router.post("/auth/register", async (req, res, next) => {
   try {
     const { username, firstname, lastname, email, password } = req.body;
 
@@ -72,6 +145,7 @@ router.post("/auth/register", validateUserInput, async (req, res, next) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    console.log({ password, hashedPassword });
 
     const newUser = await User.create({
       username,
@@ -86,7 +160,7 @@ router.post("/auth/register", validateUserInput, async (req, res, next) => {
     res.status(201).json({
       message: 'User registered successfully',
       user: {
-        id: newUser.id,
+        id: newUser.user_id, // Use user_id here
         username: newUser.username,
         email: newUser.email,
         firstname: newUser.firstname,
@@ -98,18 +172,17 @@ router.post("/auth/register", validateUserInput, async (req, res, next) => {
   }
 });
 
+
 router.post("/auth/login", async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
     // Execute the query to fetch the user
-    const users = await sequelize.query(
-      "SELECT * FROM users WHERE email = ?",
-      {
-        replacements: [email],
-        type: QueryTypes.SELECT,
-      }
-    );
+    const users = await User.findOne({ where: { email } });
+if (!user) {
+  return res.status(400).json({ message: "Invalid credentials" });
+}
+
 
     // Check if the user exists
     if (users.length === 0) {
@@ -119,7 +192,8 @@ router.post("/auth/login", async (req, res, next) => {
     const user = users[0];
 
     // Verify the password
-    if (!bcrypt.compareSync(password, user.password_hash)) {
+    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+    if (!isPasswordValid) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
@@ -140,7 +214,7 @@ router.post("/auth/login", async (req, res, next) => {
 
 
 
-router.post("/auth/logout", authenticateSession, (req, res) => {
+router.post("/auth/logout",  (req, res) => {
   req.session.destroy((err) => {
     if (err) {
       return res.status(500).json({ message: "Logout failed" });
@@ -149,7 +223,7 @@ router.post("/auth/logout", authenticateSession, (req, res) => {
   });
 });
 
-router.get("/auth/currentUser", authenticateSession, (req, res) => {
+router.get("/auth/currentUser", (req, res) => {
   res.json(req.session.user);
 });
 
@@ -158,10 +232,10 @@ router.get("/products", getAllProducts);
 
 // Attach Router to /api
 app.use("/api", router);
-
+app.use(express.static('public'));
 // Central Error Handling
 app.use(errorHandler);
-
+app.use('/images', express.static('public/images'));
 // Server Setup
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
