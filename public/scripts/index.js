@@ -200,46 +200,6 @@ async function fetchProducts() {
     console.error("Error fetching products:", error);
   }
 }
-/*function displayProducts(products) {
-  const gridContainer = document.querySelector(".grid-container");
-  gridContainer.innerHTML = "";
-
-  products.forEach((product) => {
-    const gridItem = document.createElement("div");
-    gridItem.classList.add("grid-item", "grid-item-xl");
-    gridItem.setAttribute("data-product-id", product._id);
-
-    // Determine the image URL
-    let imageUrl = '';
-    if (product.image_url) {
-      imageUrl = product.image_url;
-    } else if (product.images && Array.isArray(product.images) && product.images.length > 0) {
-      imageUrl = product.images[0].url || product.images[0];
-    } else {
-      imageUrl = '/images/default-product-image.jpg'; // Provide a default image
-    }
-    gridItem.innerHTML = `
-      <img src="${imageUrl}" alt="${product.name}">
-      <div class="overlay">
-        ${product.name} - <span class="price-span">SilkyDinars:${product.price} - Q:${productStocks[product._id]}</span>
-      </div>
-    `;
-    const addToCartButton = document.createElement("button");
-    addToCartButton.textContent = "+";
-    gridItem.appendChild(addToCartButton);
-    gridContainer.appendChild(gridItem);
-  });
-
-
-  document.querySelectorAll(".grid-item button").forEach((button) => {
-    button.addEventListener("click", () => {
-      const productId = button.parentElement.getAttribute("data-product-id");
-      addToCart(productId);
-      updateCartDisplay();
-      updateCartTotal();
-    });
-  });
-}*/
 function displayProducts(products) {
   const gridContainer = document.querySelector(".grid-container");
   gridContainer.innerHTML = "";
@@ -373,22 +333,20 @@ function updateCartDisplay() {
 
       // Handle image URL
       let imageUrl = '/images/1.jpg'; // Default image
-      if (item.product) {
-        if (item.product.images && Array.isArray(item.product.images) && item.product.images.length > 0) {
-          imageUrl = item.product.images[0];
-        } else if (item.product.image_url) {
-          imageUrl = item.product.image_url;
-        }
+      if (item.images && Array.isArray(item.images) && item.images.length > 0) {
+        imageUrl = item.images[0];
+      } else if (item.image_url) {
+        imageUrl = item.image_url;
       }
 
-      const productName = item.product ? item.product.name : 'Unknown Product';
-      const productPrice = item.product ? item.product.price : 0;
-      const productId = item.product ? item.product.product_id : '';
+      let productName = item.name || 'Unknown Product';
+      let productPrice = item.price || 0;
+      let productId = item.product_id || '';
       listItem.innerHTML = `
         <img src="${imageUrl}" alt="${productName}" class="cart-item-image">
         <div class="cart-item-details">
           <span class="item-name">${productName}</span>
-          <span class="item-price">SilkyDinars: ${productPrice.toFixed(2)}</span>
+          <span class="item-price">Dinars: ${parseFloat(productPrice).toFixed(2)}</span>
           <span class="item-quantity">Quantity: ${item.quantity}</span>
         </div>
         <div class="cart-item-controls">
@@ -427,77 +385,6 @@ function updateCartDisplay() {
   });
 }
 
-/*function updateCartDisplay() {
-  fetch('http://localhost:8080/api/cart', {
-    credentials: 'include'
-  })
-  .then(response => response.json())
-  .then(data => {
-    const cartContainer = document.getElementById('cart-container');
-    cartContainer.innerHTML = '';
-
-    if (!data.cart || !data.cart.items || data.cart.items.length === 0) {
-      cartContainer.innerHTML = '<p>Your cart is empty</p>';
-      return;
-    }
-
-    let total = 0;
-    data.cart.items.forEach(item => {
-      const itemDiv = document.createElement('div');
-      itemDiv.className = 'cart-item';
-
-      itemDiv.innerHTML = `
-        <img src="${item.image_url || '/images/default-product-image.jpg'}" alt="${item.name}" class="cart-item-image">
-        <div class="cart-item-details">
-          <span class="item-name">${item.name}</span>
-          <span class="item-price">$${item.price.toFixed(2)}</span>
-        </div>
-        <div class="cart-item-controls">
-          <button class="quantity-btn minus" data-id="${item.product_id}">-</button>
-          <span class="quantity">${item.quantity}</span>
-          <button class="quantity-btn plus" data-id="${item.product_id}">+</button>
-          <button class="remove-btn" data-id="${item.product_id}">×</button>
-        </div>
-      `;
-      
-      cartContainer.appendChild(itemDiv);
-      total += item.price * item.quantity;
-    });
-
-    const totalDiv = document.createElement('div');
-    totalDiv.className = 'cart-total';
-    totalDiv.textContent = `Total: $${total.toFixed(2)}`;
-    cartContainer.appendChild(totalDiv);
-
-    // Add event listeners for quantity buttons
-    cartContainer.querySelectorAll('.quantity-btn').forEach(btn => {
-      btn.addEventListener('click', function() {
-        const productId = this.dataset.id;
-        const currentQuantity = parseInt(this.parentElement.querySelector('.quantity').textContent);
-        const newQuantity = this.classList.contains('minus') ? currentQuantity - 1 : currentQuantity + 1;
-        
-        if (newQuantity > 0) {
-          updateCartItem(productId, newQuantity);
-        } else {
-          removeFromCart(productId);
-        }
-      });
-    });
-
-    // Add event listeners for remove buttons
-    cartContainer.querySelectorAll('.remove-btn').forEach(btn => {
-      btn.addEventListener('click', function() {
-        removeFromCart(this.dataset.id);
-      });
-    });
-  })
-  .catch(error => {
-    console.error('Error:', error);
-    const cartContainer = document.getElementById('cart-container');
-    cartContainer.innerHTML = '<p>Error loading cart</p>';
-  });
-}*/
-
 function updateCartItem(productId, quantity) {
   fetch('http://localhost:8080/api/cart/update', {
     method: 'PUT',
@@ -529,14 +416,6 @@ function removeFromCart(productId) {
   })
   .catch(error => console.error('Error:', error));
 }
-
-
-
-/*function updateCartTotal() {
-  const total = Object.values(cart).reduce((sum, product) => sum + product.price * product.quantity, 0);
-  document.getElementById("cart-total").textContent = "Total: " + total.toFixed(2);
-}*/
-
 async function login(event) {
   event.preventDefault();
 
