@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Silkyway</title>
+    <title>FromBelgradeToBeijing</title>
     <link rel="stylesheet" href="styles/index.css" />
 </head>
 <body>
     <nav class="navbar">
-        <img src="../public/images/pobednik.jpg" class="logo" alt="Logo" />
+        <img src="https://github.com/Etaylle/FromBelgradeToBeijing/blob/main/public/images/pobednik.jpg?raw=true" class="logo" alt="Logo" />
         <div class="credit-info">
             <img src="https://raw.githubusercontent.com/HaciGustav/silkyway/test/assets/friend.png" alt="friend" class="logo2" />
             <div id="silky-dinars-jar"></div>
@@ -69,7 +69,10 @@
             <button onclick="checkout()" aria-label="Proceed to checkout">Checkout</button>
             <button id="empty-cart-button" aria-label="Empty the cart">Empty Cart</button>
         </div>
-
+        <div id="cart-summary">
+            <span id="cart-item-count">0</span> items
+            <span id="cart-total">Total: $0.00</span>
+          </div>
         
 
         <!-- User Info Display -->
@@ -91,6 +94,10 @@
                 userAvatarDisplay.innerHTML = `<img src="path/to/avatar.jpg" alt="User Avatar">`;
             }
         });
+    </script>
+    <script src="https://js.stripe.com/v3/"></script>
+    <script>
+      var stripe = Stripe('your_publishable_key');
     </script>
 </body>
 </html>
