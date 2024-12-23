@@ -26,7 +26,7 @@ const app = express();
 const stripe = require('stripe')('sk_test_51QZ5BBGhX6Xc3FUkQsfdKPOpbssz079xH3fDicVXZkWDHC0UBjB8sHOpfRpHHcQIA92j4W9v4TvBrpc2V3UWAI1A00xenr6cN5');
 const bodyParser = require('body-parser');
 const { v4: uuidv4 } = require('uuid');
-
+const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 // Middleware
 app.use(express.json());
 app.use(bodyParser.json());
@@ -217,7 +217,15 @@ app.post('/api/orders/place', async (req, res) => {
     res.status(500).json({ error: 'Failed to place order' });
   }
 });
-
+// Middleware to parse raw body for Stripe webhook
+app.use(
+  '/webhook',
+  bodyParser.raw({ type: 'application/json' }) // Parse raw JSON body for Stripe
+);
+// Add the webhook route
+// Register webhook route
+app.post('/webhook', paymentController.webhook);
+app.post('/webhook', bodyParser.raw({ type: 'application/json' }), paymentController.webhook);
 
 /*
 

@@ -3,10 +3,10 @@ const { sequelize } = require("../config/db");
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { Cart, CartItem } = require('../models/cart.model'); // Import your database models
 const Product = require("../models/product.model");
-const { Order } = require('../models/order.model');
+const { Order, OrderItem } = require('../models/order.model');
+const crypto = require('crypto');
 
-
-exports.createCheckoutSession = async (req, res) => {
+createCheckoutSession = async (req, res) => {
   try {
     const userId = req.session.user.id;
     const cart = await Cart.findOne({
@@ -47,3 +47,40 @@ exports.createCheckoutSession = async (req, res) => {
   }
 };
 
+
+
+// Add this middleware for raw body parsing
+const bodyParser = require('body-parser');
+
+// Webhook route
+const webhookHandler = (req, res) => {
+  const sig = req.headers['stripe-signature'];
+
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.rawBody, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.error('⚠️  Webhook signature verification failed.', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  // Handle the event
+  switch (event.type) {
+    case 'payment_intent.succeeded':
+      const paymentIntent = event.data.object;
+      console.log('PaymentIntent was successful!');
+      break;
+    case 'payment_method.attached':
+      const paymentMethod = event.data.object;
+      console.log('PaymentMethod was attached to a Customer!');
+      break;
+    default:
+      console.log(`Unhandled event type ${event.type}`);
+  }
+
+  // Return a response to acknowledge receipt of the event
+  res.status(200).json({ received: true });
+};
+
+// Export the webhook route
+module.exports = { createCheckoutSession, webhook: webhookHandler };

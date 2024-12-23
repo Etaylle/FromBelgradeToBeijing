@@ -1,6 +1,6 @@
 // middleware/auth.middleware.js
 const User = require('../models/user.model');
-
+const crypto = require('crypto');
 const authenticateSession = async (req, res, next) => {
   try {
     if (!req.session || !req.session.user) {
@@ -46,9 +46,22 @@ const validateLoginInput = (req, res, next) => {
 
   next();
 };
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
+const validateWebhookSignature = (req, res, next) => {
+  const signature = req.headers['stripe-signature'];
+  const payload = JSON.stringify(req.body);
+  const expectedSignature = crypto.createHmac('sha256', webhookSecret).update(payload).digest('hex');
+
+  if (signature !== expectedSignature) {
+    return res.status(400).json({ error: 'Invalid signature' });
+  }
+
+  next();
+};
 module.exports = {
   authenticateSession,
   validateRegisterInput,
-  validateLoginInput
+  validateLoginInput,
+  validateWebhookSignature
 };
