@@ -88,16 +88,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     registerForm.addEventListener("submit", register);
   }
 
-  const cartContainer = document.querySelector(".cart-container");
-  const addAllButton = document.createElement("button");
-  addAllButton.textContent = "Add All to Cart";
-  cartContainer.appendChild(addAllButton);
-  addAllButton.addEventListener("click", () => {
-    products.forEach((product) => {
-      addToCart(product._id, product.price);
-      
-    });
-  });
+
 
   loginBtn.addEventListener("click", openLogin);
 
@@ -140,50 +131,6 @@ async function initiateCheckout() {
   })
   .catch(error => console.error('Error:', error));
 }
-/*async function checkout() {
-  const total = Object.values(cart).reduce((sum, product) => sum + product.price * product.quantity, 0);
-
-  if (total > currentUser.credits) {
-    alert("Insufficient credits!");
-    return;
-  }
-
-  const productIds = Object.keys(cart);
-
-  try {
-    const response = await fetch("http://localhost:8080/api/users/purchase-product", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        userId: currentUser._id,
-        productIds: productIds,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    currentUser.credits = data.user.credits;
-    cart = {};
-    localStorage.removeItem("cart");
-    updateCartDisplay();
-    displayUserInfo();
-    alert("Purchase successful!");
-    displayProducts(products);
-  } catch (error) {
-    console.error("Error during purchase:", error);
-    alert("Purchase failed!");
-    displayProducts(products);
-  }
-}
-*/
-
 async function displayUserAvatar() {
   const currentUser = await fetchCurrentUser();
   if (!currentUser || !currentUser.firstname) {
@@ -241,7 +188,7 @@ function displayProducts(products) {
     gridItem.innerHTML = `
       ${imageSlider}
       <div class="overlay">
-        ${product.name} - <span class="price-span">SilkyDinars:${product.price} - Q:${product.stock}</span>
+        ${product.name} - <span class="price-span">Dinars:${product.price} - Q:${product.stock}</span>
       </div>
     `;
     const addToCartButton = document.createElement("button");
@@ -277,7 +224,7 @@ document.querySelectorAll(".add-to-cart-btn").forEach((button) => {
     });
   });
 }
-function addToCart(productId) {
+/*function addToCart(productId) {
   console.log("Adding to cart, product ID:", productId);
 
   fetch('http://localhost:8080/api/cart/add', {
@@ -317,8 +264,139 @@ function addToCart(productId) {
     setTimeout(() => message.remove(), 2000);
   });
 }
+*/
+async function addToCart(productId) {
+  // ...
 
+  fetch('http://localhost:8080/api/cart/add', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ 
+      productId: productId,
+      quantity: 1 
+    }),
+    credentials: 'include'
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('Failed to add to cart');
+    }
+    return response.json();
+  })
+  .then(data => {
+    console.log("Add to cart successful, response:", data);
+    updateCartDisplay();  // Call this function to update the cart display
+    // Show success message
+    const message = document.createElement('div');
+    message.textContent = 'Added to cart!';
+    message.className = 'success-message';
+    document.body.appendChild(message);
+    setTimeout(() => message.remove(), 2000);
 
+    // Place the order and adjust the product stock
+    placeOrder();
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    // Show error message
+    const message = document.createElement('div');
+    message.textContent = 'Failed to add to cart';
+    message.className = 'error-message';
+    document.body.appendChild(message);
+    setTimeout(() => message.remove(), 2000);
+  });
+}
+
+async function placeOrder() {
+  const cart = await fetchCart();
+
+  if (!cart || !cart.items || cart.items.length === 0) {
+    console.error('No items in the cart');
+    return;
+  }
+
+  const orderData = {
+    userId: 1, // Replace with the actual user ID
+    totalAmount: cart.total,
+    items: cart.items.map(item => ({
+      productId: item.product_id,
+      quantity: item.quantity,
+      price: item.price,
+    })),
+  };
+
+  try {
+    const response = await fetch('http://localhost:8080/api/orders/place', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(orderData),
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to place order');
+    }
+
+    const data = await response.json();
+    console.log("Order placed successfully, response:", data);
+
+    // Adjust product stock
+    adjustProductStock(cart.items);
+
+    // Clear the cart
+    cart = {};
+    localStorage.removeItem("cart");
+    updateCartDisplay();
+    displayProducts(products);
+
+    // Show success message
+    const message = document.createElement('div');
+    message.textContent = 'Order placed successfully!';
+    message.className = 'success-message';
+    document.body.appendChild(message);
+    setTimeout(() => message.remove(), 2000);
+  } catch (error) {
+    console.error('Error:', error);
+    // Show error message
+    const message = document.createElement('div');
+    message.textContent = 'Failed to place order';
+    message.className = 'error-message';
+    document.body.appendChild(message);
+    setTimeout(() => message.remove(), 2000);
+  }
+}
+
+async function adjustProductStock(cartItems) {
+  const stockAdjustments = cartItems.map(item => ({
+    productId: item.product_id,
+    adjustment: -item.quantity,
+  }));
+
+  try {
+    const response = await fetch('http://localhost:8080/api/products/adjust-stock', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(stockAdjustments),
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to adjust product stock');
+    }
+
+    const data = await response.json();
+    console.log("Product stock adjusted successfully, response:", data);
+  } catch (error) {
+    console.error('Error:', error);
+    // Handle error (e.g., display error message to the user)
+  }
+}
 function setupCart() {
   const savedCart = localStorage.getItem("cart");
   if (savedCart) {

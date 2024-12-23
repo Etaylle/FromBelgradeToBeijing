@@ -21,15 +21,15 @@ const { getAllProducts } = require("./api/controllers/product.controller");
 const { getCurrentUser, getUsers } = require('./api/controllers/user.controller');
 const cartController = require('./api/controllers/cart.controller');
 const paymentController = require('./api/controllers/payment.controller');
+const { Order } = require('./api/models/order.model');
 const app = express();
 const stripe = require('stripe')('sk_test_51QZ5BBGhX6Xc3FUkQsfdKPOpbssz079xH3fDicVXZkWDHC0UBjB8sHOpfRpHHcQIA92j4W9v4TvBrpc2V3UWAI1A00xenr6cN5');
-// Session store
-const sessionStore = new SequelizeStore({
-  db: sequelize
-});
+const bodyParser = require('body-parser');
+const { v4: uuidv4 } = require('uuid');
 
 // Middleware
 app.use(express.json());
+app.use(bodyParser.json());
 app.use(cors({
   origin: 'http://localhost:3000',
   credentials: true
@@ -37,7 +37,24 @@ app.use(cors({
 app.use('/images', express.static(path.join(__dirname, 'public/images')));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Session configuration
+const sessionStore = new SequelizeStore({
+  db: sequelize,
+  tableName: 'sessions', // Matches your database table name
+});
+
+(async () => {
+  try {
+    if (sessionStore.sync) {
+      await sessionStore.sync();
+      console.log('Session store synced successfully');
+    } else {
+      console.error('Session store sync method is not defined');
+    }
+  } catch (error) {
+    console.error('Error syncing session store:', error);
+  }
+})();
+
 app.use(session({
   secret: process.env.SESSION_SECRET || 'odBeogradaDoTokija',
   store: sessionStore,
@@ -182,6 +199,54 @@ app.get('/api/auth/me', authenticateSession, async (req, res, next) => {
   }
 });
 
+// Endpoint to place an order
+app.post('/api/orders/place', async (req, res) => {
+  const orderData = req.body;
+
+  try {
+    const order = await Order.create({
+      orderId: uuidv4(), // Generate a unique order ID using uuidv4()
+      userId: orderData.userId,
+      totalAmount: orderData.totalAmount,
+      status: 'Pending'
+    });
+
+    res.status(200).json({ message: 'Order placed successfully', orderId: order.orderId });
+  } catch (error) {
+    console.error('Error placing order:', error);
+    res.status(500).json({ error: 'Failed to place order' });
+  }
+});
+
+
+/*
+
+// Endpoint to adjust product stock
+app.post('/api/products/adjust-stock', (req, res) => {
+  const stockAdjustments = req.body;
+  // Perform necessary operations to adjust the product stock (e.g., update the product quantities in the database)
+  // ...
+
+  // Return success message
+  res.status(200).json({ message: 'Product stock adjusted successfully' });
+});
+// Define the Order and OrderItem models
+const Order = sequelize.define('order', {
+  orderId: { type: Sequelize.STRING, primaryKey: true },
+  userId: Sequelize.STRING,
+  totalAmount: Sequelize.DECIMAL(10, 2),
+  status: Sequelize.STRING
+});
+
+const OrderItem = sequelize.define('order_item', {
+  orderId: Sequelize.STRING,
+  productId: Sequelize.STRING,
+  quantity: Sequelize.INTEGER,
+  price: Sequelize.DECIMAL(10, 2)
+});
+// Endpoint to handle Stripe webhook events
+*/
+
 // Error handling
 app.use(errorHandler);
 
@@ -208,8 +273,8 @@ app.listen(PORT, () => {
     console.error('Database connection error:', error);
   });
 });
+sequelize.options.logging = console.log;
 
- 
 
 
 

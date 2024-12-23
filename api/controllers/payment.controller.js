@@ -1,6 +1,11 @@
+const { DataTypes } = require("sequelize");
+const { sequelize } = require("../config/db");
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { Cart, CartItem } = require('../models/cart.model'); // Import your database models
 const Product = require("../models/product.model");
+const { Order } = require('../models/order.model');
+
+
 exports.createCheckoutSession = async (req, res) => {
   try {
     const userId = req.session.user.id;
@@ -35,8 +40,10 @@ exports.createCheckoutSession = async (req, res) => {
       cancel_url: `${req.headers.origin}/cancel.html`,
     });
 
+
     res.json({ id: session.id });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
+
