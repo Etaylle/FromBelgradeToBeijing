@@ -37,7 +37,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   updateCartDisplay();
 
   // Initialize Stripe
-  const stripe = Stripe('your_publishable_key');
+  const stripe = Stripe('pk_test_51QZ5BBGhX6Xc3FUkDACPmuOMhQWtYAsoMwr3KMyH4XaJmEc7kYC5cZjWsuJX9ZeG36PXyjHAHFKpOnWvmYQKYScV00F3qNFmnl');
   const registerBtn = document.getElementById("register-btn");
   const closeRegisterBtn = document.querySelector(".close-register");
 
@@ -123,7 +123,23 @@ async function fetchCurrentUser() {
     return null;
   }
 }
-
+async function initiateCheckout() {
+  fetch('/api/create-checkout-session', {
+    method: 'POST',
+    credentials: 'include'
+  })
+  .then(response => response.json())
+  .then(data => {
+    // Redirect to Stripe Checkout
+    return stripe.redirectToCheckout({ sessionId: data.id });
+  })
+  .then(result => {
+    if (result.error) {
+      alert(result.error.message);
+    }
+  })
+  .catch(error => console.error('Error:', error));
+}
 /*async function checkout() {
   const total = Object.values(cart).reduce((sum, product) => sum + product.price * product.quantity, 0);
 

@@ -59,7 +59,7 @@ exports.getCart = async (req, res) => {
         model: CartItem,
         include: [{
           model: Product,
-          attributes: ['name', 'price', 'image_url'] // Include these product details
+          attributes: ['name', 'price', 'image_url'] 
         }]
       }]
     });

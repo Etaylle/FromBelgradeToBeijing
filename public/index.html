@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>FromBelgradeToBeijing</title>
     <link rel="stylesheet" href="styles/index.css" />
+    <script src="https://js.stripe.com/v3/"></script>
 </head>
 <body>
     <nav class="navbar">
@@ -39,21 +40,19 @@
 
         <!-- Register Section -->
         <section id="register" class="login-container" style="display: none;">
-      
-                <div id="register" class="modal">
-                    <button class="close-register" aria-label="Close login form">x</button>              
-                    <h2>Register</h2>
-                    <form id="register-form">
-                      <input type="text" id="username" placeholder="Username" required>
-                      <input type="text" id="firstname" placeholder="First Name" required>
-                      <input type="text" id="lastname" placeholder="Last Name" required>
-                      <input type="email" id="reg-email" placeholder="Email" required>
-                      <input type="password" id="reg-password" placeholder="Password" required>
-                      <button type="submit">Register</button>
-                    </form>
-                    <p id="register-status"></p>
-                  </div>
-                </div>
+            <div id="register" class="modal">
+                <button class="close-register" aria-label="Close login form">x</button>
+                <h2>Register</h2>
+                <form id="register-form">
+                    <input type="text" id="username" placeholder="Username" required />
+                    <input type="text" id="firstname" placeholder="First Name" required />
+                    <input type="text" id="lastname" placeholder="Last Name" required />
+                    <input type="email" id="reg-email" placeholder="Email" required />
+                    <input type="password" id="reg-password" placeholder="Password" required />
+                    <button type="submit">Register</button>
+                </form>
+                <p id="register-status"></p>
+            </div>
         </section>
 
         <!-- Grid Section -->
@@ -72,8 +71,7 @@
         <div id="cart-summary">
             <span id="cart-item-count">0</span> items
             <span id="cart-total">Total: $0.00</span>
-          </div>
-        
+        </div>
 
         <!-- User Info Display -->
         <div id="user-info-display" style="display: none;"></div>
@@ -94,10 +92,36 @@
                 userAvatarDisplay.innerHTML = `<img src="path/to/avatar.jpg" alt="User Avatar">`;
             }
         });
+        const stripe = Stripe('pk_test_51QZ5BBGhX6Xc3FUkDACPmuOMhQWtYAsoMwr3KMyH4XaJmEc7kYC5cZjWsuJX9ZeG36PXyjHAHFKpOnWvmYQKYScV00F3qNFmnl');
+        async function initiateCheckout() {
+            try {
+                const response = await fetch('/api/create-checkout-session', {
+                    method: 'POST',
+                    // Add your request headers and body if needed
+                });
+                const data = await response.json();
+
+                // Redirect to Stripe Checkout
+                const result = await stripe.redirectToCheckout({ sessionId: data.id });
+
+                if (result.error) {
+                    console.error('Error:', result.error.message);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        function login(event) {
+            event.preventDefault();
+            // Perform login logic here
+        }
+
+        function checkout() {
+            // Perform checkout logic here
+        }
     </script>
     <script src="https://js.stripe.com/v3/"></script>
-    <script>
-      var stripe = Stripe('your_publishable_key');
-    </script>
 </body>
 </html>
+

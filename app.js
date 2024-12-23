@@ -20,9 +20,9 @@ const { Product } = require('./api/models/product.model');
 const { getAllProducts } = require("./api/controllers/product.controller");
 const { getCurrentUser, getUsers } = require('./api/controllers/user.controller');
 const cartController = require('./api/controllers/cart.controller');
-//const paymentController = require('./api/controllers/payment.controller');
+const paymentController = require('./api/controllers/payment.controller');
 const app = express();
-
+const stripe = require('stripe')('sk_test_51QZ5BBGhX6Xc3FUkQsfdKPOpbssz079xH3fDicVXZkWDHC0UBjB8sHOpfRpHHcQIA92j4W9v4TvBrpc2V3UWAI1A00xenr6cN5');
 // Session store
 const sessionStore = new SequelizeStore({
   db: sequelize
@@ -39,7 +39,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Session configuration
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'your-secret-key',
+  secret: process.env.SESSION_SECRET || 'odBeogradaDoTokija',
   store: sessionStore,
   resave: false,
   saveUninitialized: false,
@@ -60,7 +60,7 @@ app.get('/api/users/all', authenticateSession, getUsers);
 // Cart routes
 app.post('/api/cart/add', authenticateSession, cartController.addToCart);
 app.get('/api/cart', authenticateSession, cartController.getCart);
-app.put('/api/cart/update', authenticateSession, cartController.updateCartItem);
+
 app.delete('/api/cart/remove', authenticateSession, cartController.removeFromCart);
 // Route to fetch cart details using the stored procedure
 app.get('/api/cart/:userId/details', authenticateSession, async (req, res) => {
@@ -88,7 +88,7 @@ app.get('/api/cart/:userId/totals', authenticateSession, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch cart totals' });
   }
 });
-//app.post('/api/create-checkout-session', authenticateSession, paymentController.createCheckoutSession);
+app.post('/api/create-checkout-session', authenticateSession, paymentController.createCheckoutSession);
 // Auth Routes
 
 
