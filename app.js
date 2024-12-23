@@ -27,9 +27,7 @@ const stripe = require('stripe')('sk_test_51QZ5BBGhX6Xc3FUkQsfdKPOpbssz079xH3fDi
 const bodyParser = require('body-parser');
 const { v4: uuidv4 } = require('uuid');
 const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-// Middleware
-app.use(express.json());
-app.use(bodyParser.json());
+const webhookHandler = require('./api/middleware/webhookHandler');
 app.use(cors({
   origin: 'http://localhost:3000',
   credentials: true
@@ -66,13 +64,47 @@ app.use(session({
     maxAge: 24 * 60 * 60 * 1000 // 24 hours
   }
 }));
+// Webhook route: Use raw body parsing
+app.post(
+  '/webhook',
+  bodyParser.raw({ type: 'application/json' }), // Parse raw body for Stripe
+  async (req, res) => {
+    const sig = req.headers['stripe-signature'];
+    let event;
+
+    try {
+      // Pass the raw body to Stripe's constructEvent
+      event = stripe.webhooks.constructEvent(req.body, sig, stripeWebhookSecret);
+      console.log('Webhook received:', event.type);
+
+      // Handle different event types
+      switch (event.type) {
+        case 'checkout.session.completed':
+          const session = event.data.object;
+          console.log('Checkout session completed:', session);
+          // Add logic to process the session, e.g., create an order
+          break;
+
+        default:
+          console.log(`Unhandled event type: ${event.type}`);
+      }
+
+      res.status(200).json({ received: true });
+    } catch (err) {
+      console.error('Webhook signature verification failed:', err.message);
+      res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+  }
+);
+
+// Other routes
+app.use(express.json()); // Parse JSON for non-webhook routes
 
 // Use the controller
 app.get('/api/products', getAllProducts);
 // Protected routes - require authentication
 app.get('/api/users/current', authenticateSession, getCurrentUser);
 app.get('/api/users/all', authenticateSession, getUsers);
-
 
 // Cart routes
 app.post('/api/cart/add', authenticateSession, cartController.addToCart);
@@ -107,8 +139,6 @@ app.get('/api/cart/:userId/totals', authenticateSession, async (req, res) => {
 });
 app.post('/api/create-checkout-session', authenticateSession, paymentController.createCheckoutSession);
 // Auth Routes
-
-
 app.post('/api/auth/register', validateRegisterInput, async (req, res, next) => {
   try {
     const { username, email, password, firstname, lastname } = req.body;
@@ -217,43 +247,6 @@ app.post('/api/orders/place', async (req, res) => {
     res.status(500).json({ error: 'Failed to place order' });
   }
 });
-// Middleware to parse raw body for Stripe webhook
-app.use(
-  '/webhook',
-  bodyParser.raw({ type: 'application/json' }) // Parse raw JSON body for Stripe
-);
-// Add the webhook route
-// Register webhook route
-app.post('/webhook', paymentController.webhook);
-app.post('/webhook', bodyParser.raw({ type: 'application/json' }), paymentController.webhook);
-
-/*
-
-// Endpoint to adjust product stock
-app.post('/api/products/adjust-stock', (req, res) => {
-  const stockAdjustments = req.body;
-  // Perform necessary operations to adjust the product stock (e.g., update the product quantities in the database)
-  // ...
-
-  // Return success message
-  res.status(200).json({ message: 'Product stock adjusted successfully' });
-});
-// Define the Order and OrderItem models
-const Order = sequelize.define('order', {
-  orderId: { type: Sequelize.STRING, primaryKey: true },
-  userId: Sequelize.STRING,
-  totalAmount: Sequelize.DECIMAL(10, 2),
-  status: Sequelize.STRING
-});
-
-const OrderItem = sequelize.define('order_item', {
-  orderId: Sequelize.STRING,
-  productId: Sequelize.STRING,
-  quantity: Sequelize.INTEGER,
-  price: Sequelize.DECIMAL(10, 2)
-});
-// Endpoint to handle Stripe webhook events
-*/
 
 // Error handling
 app.use(errorHandler);
@@ -282,8 +275,4 @@ app.listen(PORT, () => {
   });
 });
 sequelize.options.logging = console.log;
-
-
-
-
 module.exports = app;
