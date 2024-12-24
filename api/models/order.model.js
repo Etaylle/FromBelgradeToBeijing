@@ -4,51 +4,57 @@ const { sequelize } = require("../config/db");
 
 // Define Order model
 const Order = sequelize.define('Order', {
-  orderId: {
+  order_id: {
     type: DataTypes.INTEGER,
     primaryKey: true,
     autoIncrement: true
   },
-  userId: {
+  user_id: {
     type: DataTypes.INTEGER,
-    allowNull: false
+    references: {
+      model: 'users',
+      key: 'user_id'
+    }
   },
-  cartId: {
-    type: DataTypes.INTEGER,
-    allowNull: false
-  },
-  orderDate: {
-    type: DataTypes.DATE,
-    defaultValue: DataTypes.NOW
-  },
-  totalAmount: {
+  total_amount: {
     type: DataTypes.DECIMAL(10, 2),
     allowNull: false
   },
   status: {
-    type: DataTypes.ENUM('pending', 'processing', 'shipped', 'delivered', 'cancelled'),
-    defaultValue: 'pending'
+    type: DataTypes.ENUM('pending', 'shipped', 'delivered', 'cancelled'),
+    defaultValue: 'delivered'
+  },
+  createdAt: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
+  },
+  updatedAt: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
   }
-}, {
+},
+ {
   tableName: 'orders'
 });
 
 // Define OrderItem model
 const OrderItem = sequelize.define('OrderItem', {
-  orderItemId: {
+  item_id: {
     type: DataTypes.INTEGER,
     primaryKey: true,
     autoIncrement: true
   },
-  orderId: {
+  order_id: {
     type: DataTypes.INTEGER,
-    allowNull: false
+    allowNull: false,
+    references: {
+      model: 'orders',
+      key: 'order_id'
+    }
+  
   },
-  cartItemId: {
-    type: DataTypes.INTEGER,
-    allowNull: false
-  },
-  productId: {
+ 
+  product_id: {
     type: DataTypes.INTEGER,
     allowNull: false
   },
@@ -58,21 +64,21 @@ const OrderItem = sequelize.define('OrderItem', {
   },
   price: {
     type: DataTypes.DECIMAL(10, 2),
-    allowNull: false
+    allowNull: false,
   }
 }, {
-  tableName: 'order_items'
+  tableName: 'order_items',
 });
 
 // Associate Order with OrderItem
 Order.hasMany(OrderItem, {
-  foreignKey: 'orderId',
+  foreignKey: 'order_id',
   as: 'items'
 });
 
 // Associate OrderItem with Order
 OrderItem.belongsTo(Order, {
-  foreignKey: 'orderId',
+  foreignKey: 'order_id',
   as: 'order'
 });
 

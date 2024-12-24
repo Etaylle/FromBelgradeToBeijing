@@ -24,7 +24,7 @@ const webhookHandler = async (req, res) => {
           {
             user_id: userId,
             total_amount: totalAmount,
-            status: 'completed',
+            status: 'delivered',
             payment_status: session.payment_status,
             stripe_session_id: session.id,
             customer_email: session.customer_details.email,

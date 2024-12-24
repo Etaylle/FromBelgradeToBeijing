@@ -1,5 +1,6 @@
 require("dotenv").config();
 const { Sequelize } = require("sequelize");
+
 /*const [results, metadata] = await sequelize.query('CALL get_cart_details(:p_user_id)', {
   replacements: { p_user_id: userId },
 });*/
@@ -39,5 +40,6 @@ const callProcedure = async (procedureName, params = {}) => {
     console.error(`Error executing procedure ${procedureName}:`, error);
   }
 };
+
 // Export the sequelize instance and the connectDB function
 module.exports = { sequelize, connectDB, callProcedure };

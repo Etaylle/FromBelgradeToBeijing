@@ -21,13 +21,15 @@ const { getAllProducts } = require("./api/controllers/product.controller");
 const { getCurrentUser, getUsers } = require('./api/controllers/user.controller');
 const cartController = require('./api/controllers/cart.controller');
 const paymentController = require('./api/controllers/payment.controller');
-const { Order } = require('./api/models/order.model');
+const { Order, OrderItem } = require('./api/models/order.model');
 const app = express();
 const stripe = require('stripe')('sk_test_51QZ5BBGhX6Xc3FUkQsfdKPOpbssz079xH3fDicVXZkWDHC0UBjB8sHOpfRpHHcQIA92j4W9v4TvBrpc2V3UWAI1A00xenr6cN5');
 const bodyParser = require('body-parser');
 const { v4: uuidv4 } = require('uuid');
 const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-const webhookHandler = require('./api/middleware/webhookHandler');
+const webhookHandler = require('./api/middleware/webhookHandler.js');
+const { handleCheckoutSessionCompleted,createOrder } = require('./api/services/order.services');
+
 app.use(cors({
   origin: 'http://localhost:3000',
   credentials: true
@@ -65,7 +67,47 @@ app.use(session({
   }
 }));
 // Webhook route: Use raw body parsing
-app.post(
+/*app.post('/webhook', bodyParser.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+
+  try {
+    // Pass the raw body to Stripe's constructEvent
+    event = stripe.webhooks.constructEvent(req.body, sig, stripeWebhookSecret);
+    console.log('Webhook received:', event.type);
+
+    switch (event.type) {
+      case 'checkout.session.completed':
+        const session = event.data.object;
+
+        // Extract metadata
+        const { userId, cartItems } = session.metadata;
+
+        let items = [];
+        try {
+          items = JSON.parse(cartItems);
+        } catch (error) {
+          console.error('Invalid cartItems format:', error);
+          return res.status(400).send('Invalid cartItems format');
+        }
+
+        // Create the order using the shared logic
+        const order = await createOrder(userId, items);  // Use the shared logic
+        console.log('Order created successfully:', order);
+        break;
+
+      default:
+        console.log(`Unhandled event type: ${event.type}`);
+    }
+
+    res.status(200).json({ received: true });
+  } catch (err) {
+    console.error('Webhook signature verification failed:', err.message);
+    res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+});*/
+
+/*app.post(
   '/webhook',
   bodyParser.raw({ type: 'application/json' }), // Parse raw body for Stripe
   async (req, res) => {
@@ -94,9 +136,90 @@ app.post(
       console.error('Webhook signature verification failed:', err.message);
       res.status(400).send(`Webhook Error: ${err.message}`);
     }
-  }
-);
+    if (event.type === 'checkout.session.completed') {
+      
+  
+      try {
+        const session = event.data.object;
+  
+      // Extract metadata
+      const { userId, totalAmount, cartItems } = session.metadata;
+        // Create the Order in Sequelize
+        const order = await Order.create({
+          user_id: userId,
+          total_amount: totalAmount,
+          status: 'delivered',
+        });
+  
+        // Create OrderItems
+        const items = JSON.parse(cartItems).map(item => ({
+          order_id: order.order_id,
+          product_id: item.productId,
+          quantity: item.quantity,
+          price: item.price,
+        }));
+  
+        await OrderItem.bulkCreate(items);
+  
+        console.log('Order created successfully:', order);
+        res.status(200).send('Order processed');
+      } catch (err) {
+        console.error('Error creating order:', err);
+        res.status(500).send('Internal Server Error');
+      }
+    }
+  });
+*/
+app.post('/webhook', bodyParser.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
 
+  try {
+    // Pass the raw body to Stripe's constructEvent
+    event = stripe.webhooks.constructEvent(req.body, sig, stripeWebhookSecret);
+    console.log('Webhook received:', event.type);
+
+    switch (event.type) {
+      case 'checkout.session.completed':
+        try {
+          const session = event.data.object;
+
+          // Extract metadata and parse cartItems
+          const { userId, cartItems } = session.metadata;
+          
+          let items = [];
+          try {
+            items = JSON.parse(cartItems);  // Ensure this is correctly parsed
+          } catch (error) {
+            console.error('Invalid cartItems format:', error);
+            return res.status(400).send('Invalid cartItems format');
+          }
+
+          // Validate the items format (check for productId and quantity)
+          if (!Array.isArray(items) || !items.every(item => item.productId && item.quantity)) {
+            console.error('Invalid items data:', items);
+            return res.status(400).send('Invalid items data');
+          }
+
+          // Create the order using the shared logic
+          const order = await createOrder(userId, items);  // Call the shared logic
+          console.log('Order created successfully:', order);
+        } catch (err) {
+          console.error('Error during order creation:', err.message);
+          return res.status(500).send('Error during order creation');
+        }
+        break;
+
+      default:
+        console.log(`Unhandled event type: ${event.type}`);
+    }
+
+    res.status(200).json({ received: true });
+  } catch (err) {
+    console.error('Webhook signature verification failed:', err.message);
+    res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+});
 // Other routes
 app.use(express.json()); // Parse JSON for non-webhook routes
 
@@ -229,24 +352,6 @@ app.get('/api/auth/me', authenticateSession, async (req, res, next) => {
   }
 });
 
-// Endpoint to place an order
-app.post('/api/orders/place', async (req, res) => {
-  const orderData = req.body;
-
-  try {
-    const order = await Order.create({
-      orderId: uuidv4(), // Generate a unique order ID using uuidv4()
-      userId: orderData.userId,
-      totalAmount: orderData.totalAmount,
-      status: 'Pending'
-    });
-
-    res.status(200).json({ message: 'Order placed successfully', orderId: order.orderId });
-  } catch (error) {
-    console.error('Error placing order:', error);
-    res.status(500).json({ error: 'Failed to place order' });
-  }
-});
 
 // Error handling
 app.use(errorHandler);
