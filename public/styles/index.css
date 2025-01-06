@@ -24,6 +24,7 @@ html {
   }
   
   .navbar {
+    height: 70px;
     position: sticky;
     top: 0;
     z-index: 99;
@@ -33,6 +34,11 @@ html {
     display: flex;
     justify-content: space-between;
     align-items: center;
+  }
+
+  .navbar .logo{
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 24px;
   }
   
   .navbar img {
