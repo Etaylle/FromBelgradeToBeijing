@@ -11,6 +11,39 @@ const getAllProducts = async (req, res) => {
   }
 };
 
+
+/*const getAllProducts = async (req, res) => {
+  try {
+    let products = await Product.findAll();
+    
+    // Process the images
+    products = products.map(product => {
+      const plainProduct = product.get({ plain: true });
+      
+      // Handle image_url
+      if (plainProduct.image_url) {
+        plainProduct.image_url = `/images/${plainProduct.image_url}`;
+      }
+      
+      // Handle multiple images
+      if (plainProduct.images) {
+        try {
+          const imagesArray = JSON.parse(plainProduct.images);
+          plainProduct.images = imagesArray.map(img => `/images/${img}`);
+        } catch (error) {
+          console.error('Error parsing images JSON:', error);
+          plainProduct.images = [];
+        }
+      }
+      
+      return plainProduct;
+    });
+
+    res.json(products);
+  } catch (error) {
+    res.status(500).json({ message: 'Error retrieving products', error: error.message });
+  }
+};*/
 //* GET PRODUCT BY ID
 const getProductById = async (req, res) => {
   try {

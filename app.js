@@ -1,185 +1,383 @@
-require("dotenv").config();
-const express = require("express");
-const cors = require("cors");
-const session = require("express-session");
-const SequelizeStore = require("connect-session-sequelize")(session.Store);
-const { connectDB, sequelize } = require("./api/config/db");
-const swaggerUi = require("swagger-ui-express");
-const swaggerDoc = require("./swagger.json");
-const bcrypt = require("bcrypt");
-const { QueryTypes } = require("sequelize");
-const validateUserInput = require("./api/middleware/validation"); // Validation Middleware
-const authenticateSession = require("./api/middleware/authenticateSession"); // Authentication Middleware
-const errorHandler = require("./api/middleware/errorHandler"); // Central Error Handler
-const { getAllProducts } = require("./api/controllers/product.controller"); // Product Controller
-
+// app.js
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const session = require('express-session');
+const SequelizeStore = require('connect-session-sequelize')(session.Store);
+const { connectDB, sequelize } = require('./api/config/db');
+const bcrypt = require('bcrypt');
+const path = require('path');
+const { Cart, CartItem } = require('./api/models/cart.model');
+const { callProcedure } = require('./api/config/db');
+const {
+  authenticateSession,
+  validateRegisterInput,
+  validateLoginInput
+} = require('./api/middleware/auth.middleware');
+const errorHandler = require('./api/middleware/error.middleware');
+const User = require('./api/models/user.model');
+const { Product } = require('./api/models/product.model');
+const { getAllProducts } = require("./api/controllers/product.controller");
+const { getCurrentUser, getUsers } = require('./api/controllers/user.controller');
+const cartController = require('./api/controllers/cart.controller');
+const paymentController = require('./api/controllers/payment.controller');
+const { Order, OrderItem } = require('./api/models/order.model');
 const app = express();
+const stripe = require('stripe')('sk_test_51QZ5BBGhX6Xc3FUkQsfdKPOpbssz079xH3fDicVXZkWDHC0UBjB8sHOpfRpHHcQIA92j4W9v4TvBrpc2V3UWAI1A00xenr6cN5');
+const bodyParser = require('body-parser');
+const { v4: uuidv4 } = require('uuid');
+const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+const webhookHandler = require('./api/middleware/webhookHandler.js');
+const { handleCheckoutSessionCompleted,createOrder } = require('./api/services/order.services');
 
-// Session store
+app.use(cors({
+  origin: 'http://localhost:3000',
+  credentials: true
+}));
+app.use('/images', express.static(path.join(__dirname, 'public/images')));
+app.use(express.static(path.join(__dirname, 'public')));
+
 const sessionStore = new SequelizeStore({
   db: sequelize,
+  tableName: 'sessions', // Matches your database table name
 });
 
-// Middleware
-app.use(express.json());
-app.use(cors());
-app.use(express.static("./public"));
-
-// Configure session middleware
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET || "your-secret-key",
-    store: sessionStore,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      maxAge: 24 * 60 * 60 * 1000, // 1 day
-      secure: process.env.NODE_ENV === "production", // Use secure cookies in production
-    },
-  })
-);
-
-// Sync database and session store
 (async () => {
   try {
-    await connectDB();
-    await sessionStore.sync();
-    await sequelize.sync({ alter: true });
-    console.log("Database and session store synced successfully!");
+    if (sessionStore.sync) {
+      await sessionStore.sync();
+      console.log('Session store synced successfully');
+    } else {
+      console.error('Session store sync method is not defined');
+    }
   } catch (error) {
-    console.error("Error syncing database or session store:", error);
+    console.error('Error syncing session store:', error);
   }
 })();
 
-// Swagger Documentation
-app.use("/swagger", swaggerUi.serve, swaggerUi.setup(swaggerDoc));
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'odBeogradaDoTokija',
+  store: sessionStore,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    secure: false, // Set to true if using HTTPS
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+// Webhook route: Use raw body parsing
+/*app.post('/webhook', bodyParser.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
 
-// Router Setup
-const router = express.Router();
-
-// AUTH Routes
-router.post("/auth/register", validateUserInput, async (req, res, next) => {
-  console.log("Register endpoint hit"); // Debugging line to check if route is being reached
   try {
-    const { username, firstname, lastname, email, password } = req.body;
-    console.log("Received Data:", { username, firstname, lastname, email, password });
+    // Pass the raw body to Stripe's constructEvent
+    event = stripe.webhooks.constructEvent(req.body, sig, stripeWebhookSecret);
+    console.log('Webhook received:', event.type);
 
-    // Check if email or username already exists
-    const existingUser = await User.findOne({ where: { email } });
-    if (existingUser) {
-      return res.status(400).json({ message: 'Email is already in use' });
+    switch (event.type) {
+      case 'checkout.session.completed':
+        const session = event.data.object;
+
+        // Extract metadata
+        const { userId, cartItems } = session.metadata;
+
+        let items = [];
+        try {
+          items = JSON.parse(cartItems);
+        } catch (error) {
+          console.error('Invalid cartItems format:', error);
+          return res.status(400).send('Invalid cartItems format');
+        }
+
+        // Create the order using the shared logic
+        const order = await createOrder(userId, items);  // Use the shared logic
+        console.log('Order created successfully:', order);
+        break;
+
+      default:
+        console.log(`Unhandled event type: ${event.type}`);
     }
 
-    const existingUsername = await User.findOne({ where: { username } });
-    if (existingUsername) {
-      return res.status(400).json({ message: 'Username is already in use' });
+    res.status(200).json({ received: true });
+  } catch (err) {
+    console.error('Webhook signature verification failed:', err.message);
+    res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+});*/
+
+/*app.post(
+  '/webhook',
+  bodyParser.raw({ type: 'application/json' }), // Parse raw body for Stripe
+  async (req, res) => {
+    const sig = req.headers['stripe-signature'];
+    let event;
+
+    try {
+      // Pass the raw body to Stripe's constructEvent
+      event = stripe.webhooks.constructEvent(req.body, sig, stripeWebhookSecret);
+      console.log('Webhook received:', event.type);
+
+      // Handle different event types
+      switch (event.type) {
+        case 'checkout.session.completed':
+          const session = event.data.object;
+          console.log('Checkout session completed:', session);
+          // Add logic to process the session, e.g., create an order
+          break;
+
+        default:
+          console.log(`Unhandled event type: ${event.type}`);
+      }
+
+      res.status(200).json({ received: true });
+    } catch (err) {
+      console.error('Webhook signature verification failed:', err.message);
+      res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+    if (event.type === 'checkout.session.completed') {
+      
+  
+      try {
+        const session = event.data.object;
+  
+      // Extract metadata
+      const { userId, totalAmount, cartItems } = session.metadata;
+        // Create the Order in Sequelize
+        const order = await Order.create({
+          user_id: userId,
+          total_amount: totalAmount,
+          status: 'delivered',
+        });
+  
+        // Create OrderItems
+        const items = JSON.parse(cartItems).map(item => ({
+          order_id: order.order_id,
+          product_id: item.productId,
+          quantity: item.quantity,
+          price: item.price,
+        }));
+  
+        await OrderItem.bulkCreate(items);
+  
+        console.log('Order created successfully:', order);
+        res.status(200).send('Order processed');
+      } catch (err) {
+        console.error('Error creating order:', err);
+        res.status(500).send('Internal Server Error');
+      }
+    }
+  });
+*/
+app.post('/webhook', bodyParser.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+
+  try {
+    // Pass the raw body to Stripe's constructEvent
+    event = stripe.webhooks.constructEvent(req.body, sig, stripeWebhookSecret);
+    console.log('Webhook received:', event.type);
+
+    switch (event.type) {
+      case 'checkout.session.completed':
+        try {
+          const session = event.data.object;
+
+          // Extract metadata and parse cartItems
+          const { userId, cartItems } = session.metadata;
+          
+          let items = [];
+          try {
+            items = JSON.parse(cartItems);  // Ensure this is correctly parsed
+          } catch (error) {
+            console.error('Invalid cartItems format:', error);
+            return res.status(400).send('Invalid cartItems format');
+          }
+
+          // Validate the items format (check for productId and quantity)
+          if (!Array.isArray(items) || !items.every(item => item.productId && item.quantity)) {
+            console.error('Invalid items data:', items);
+            return res.status(400).send('Invalid items data');
+          }
+
+          // Create the order using the shared logic
+          const order = await createOrder(userId, items);  // Call the shared logic
+          console.log('Order created successfully:', order);
+        } catch (err) {
+          console.error('Error during order creation:', err.message);
+          return res.status(500).send('Error during order creation');
+        }
+        break;
+
+      default:
+        console.log(`Unhandled event type: ${event.type}`);
     }
 
-    // Hash the password
-    const hashedPassword = bcrypt.hashSync(password, 10);
+    res.status(200).json({ received: true });
+  } catch (err) {
+    console.error('Webhook signature verification failed:', err.message);
+    res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+});
+// Other routes
+app.use(express.json()); // Parse JSON for non-webhook routes
 
-    // Create the new user in the database using Sequelize
-    const newUser = await User.create({
+// Use the controller
+app.get('/api/products', getAllProducts);
+// Protected routes - require authentication
+app.get('/api/users/current', authenticateSession, getCurrentUser);
+app.get('/api/users/all', authenticateSession, getUsers);
+
+// Cart routes
+app.post('/api/cart/add', authenticateSession, cartController.addToCart);
+app.get('/api/cart', authenticateSession, cartController.getCart);
+
+app.delete('/api/cart/remove', authenticateSession, cartController.removeFromCart);
+// Route to fetch cart details using the stored procedure
+app.get('/api/cart/:userId/details', authenticateSession, async (req, res) => {
+  const userId = req.params.userId;
+  try {
+    const cartDetails = await callProcedure('get_cart_details', { p_user_id: userId });
+    res.status(200).json(cartDetails);
+  } catch (error) {
+    console.error('Error fetching cart details:', error);
+    res.status(500).json({ error: 'Failed to fetch cart details' });
+  }
+});
+
+// Route to fetch cart totals using the view
+app.get('/api/cart/:userId/totals', authenticateSession, async (req, res) => {
+  const userId = req.params.userId;
+  try {
+    const [totals] = await sequelize.query(
+      'SELECT * FROM cart_totals WHERE user_id = :userId',
+      { replacements: { userId } }
+    );
+    res.status(200).json(totals);
+  } catch (error) {
+    console.error('Error fetching cart totals:', error);
+    res.status(500).json({ error: 'Failed to fetch cart totals' });
+  }
+});
+app.post('/api/create-checkout-session', authenticateSession, paymentController.createCheckoutSession);
+// Auth Routes
+app.post('/api/auth/register', validateRegisterInput, async (req, res, next) => {
+  try {
+    const { username, email, password, firstname, lastname } = req.body;
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const user = await User.create({
       username,
       email,
       password_hash: hashedPassword,
       firstname,
       lastname,
-      credits: 0,  // Default credits
-      role: 'customer',  // Default role
+      role: 'customer',
+      credits: 0
     });
 
-    // Send success response
     res.status(201).json({
-      message: 'User registered successfully',
+      message: 'Registration successful',
       user: {
-        id: newUser.id,
-        username: newUser.username,
-        email: newUser.email,
-        firstname: newUser.firstname,
-        lastname: newUser.lastname,
-        credits: newUser.credits,
-        role: newUser.role,
-      },
+        id: user.user_id,
+        username: user.username,
+        email: user.email,
+        firstname: user.firstname,
+        lastname: user.lastname
+      }
     });
-  } catch (err) {
-    console.error("Error during registration:", err);
-    if (err.name === "SequelizeUniqueConstraintError") {
-      res.status(400).json({ message: "Email or Username already exists" });
-    } else {
-      next(err); // Pass error to central error handler
-    }
+  } catch (error) {
+    next(error);
   }
-});
+})
 
-router.post("/auth/login", async (req, res, next) => {
+
+app.post('/api/auth/login', validateLoginInput, async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
-    // Execute the query to fetch the user
-    const users = await sequelize.query(
-      "SELECT * FROM users WHERE email = ?",
-      {
-        replacements: [email],
-        type: QueryTypes.SELECT,
-      }
-    );
+    const user = await User.findOne({ where: { email }});
 
-    // Check if the user exists
-    if (users.length === 0) {
-      return res.status(400).json({ message: "Invalid credentials" });
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    const user = users[0];
+    const validPassword = await bcrypt.compare(password, user.password_hash);
 
-    // Verify the password
-    if (!bcrypt.compareSync(password, user.password_hash)) {
-      return res.status(400).json({ message: "Invalid credentials" });
+    if (!validPassword) {
+      return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    // Set session data
     req.session.user = {
       id: user.user_id,
-      firstname: user.firstname,
-      lastname: user.lastname,
-      address: user.address,
-      role: user.role,
+      username: user.username,
+      role: user.role
     };
 
-    res.json({ message: "Login successful", user: req.session.user });
-  } catch (err) {
-    next(err); // Pass error to the central error handler
+    res.json({
+      message: 'Login successful',
+      user: {
+        id: user.user_id,
+        username: user.username,
+        email: user.email,
+        firstname: user.firstname,
+        lastname: user.lastname,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/auth/logout', authenticateSession, (req, res) => {
+  req.session.destroy(err => {
+    if (err) {
+      return res.status(500).json({ message: 'Error logging out' });
+    }
+    res.json({ message: 'Logged out successfully' });
+  });
+});
+
+app.get('/api/auth/me', authenticateSession, async (req, res, next) => {
+  try {
+    const user = await User.findByPk(req.session.user.id, {
+      attributes: { exclude: ['password_hash'] }
+    });
+    res.json(user);
+  } catch (error) {
+    next(error);
   }
 });
 
 
-
-router.post("/auth/logout", authenticateSession, (req, res) => {
-  req.session.destroy((err) => {
-    if (err) {
-      return res.status(500).json({ message: "Logout failed" });
-    }
-    res.json({ message: "Logout successful" });
-  });
-});
-
-router.get("/auth/currentUser", authenticateSession, (req, res) => {
-  res.json(req.session.user);
-});
-
-// PRODUCT Routes
-router.get("/products", getAllProducts);
-
-// Attach Router to /api
-app.use("/api", router);
-
-// Central Error Handling
+// Error handling
 app.use(errorHandler);
 
-// Server Setup
+// Start server
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}/`);
-});
+  console.log(`Server running on port ${PORT}`);
 
+  // Initialize database
+  connectDB()
+  .then(async () => {
+
+    if (sessionStore.sync) {
+    await sessionStore.sync();
+    console.log('Session store synced');
+    }else{
+      console.log('Session store not synced');
+    }
+    console.log('Session Store:', sessionStore);
+    await Cart.sync();
+    await CartItem.sync();
+    console.log('Database connected and models synced');
+  }).catch(error => {
+    console.error('Database connection error:', error);
+  });
+});
+sequelize.options.logging = console.log;
 module.exports = app;

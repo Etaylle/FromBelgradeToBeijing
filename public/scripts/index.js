@@ -1,11 +1,10 @@
+
 let currentUser;
-//let token;
 let cart = {};
 let products = [];
 let productStocks = {};
 let logo2;
 displayUserInfo();
-
 // login modal functions
 const openLogin = (e) => {
   const loginContainer = document.querySelector("#login");
@@ -24,16 +23,21 @@ const closeRegister = (e) => {
   const registerContainer = document.querySelector("#register");
   registerContainer.style.display = "none";
 };
-document.addEventListener("DOMContentLoaded", () => {
-  //currentUser = JSON.parse(localStorage.getItem("currentUser"));
-  //token = localStorage.getItem("token");
+
+document.addEventListener("DOMContentLoaded", async () => {
+
+  const currentUser = await fetchCurrentUser();
+
 
   fetchProducts();
   displayUserInfo();
   setupCart();
-  //displayUserAvatar();
+  displayUserAvatar();
   logo2 = document.querySelector(".credit-info");
+  updateCartDisplay();
 
+  // Initialize Stripe
+  const stripe = Stripe('pk_test_51QZ5BBGhX6Xc3FUkDACPmuOMhQWtYAsoMwr3KMyH4XaJmEc7kYC5cZjWsuJX9ZeG36PXyjHAHFKpOnWvmYQKYScV00F3qNFmnl');
   const registerBtn = document.getElementById("register-btn");
   const closeRegisterBtn = document.querySelector(".close-register");
 
@@ -60,7 +64,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const checkoutButton = document.querySelector('button[onclick="checkout()"]');
   if (checkoutButton) {
-    checkoutButton.addEventListener("click", checkout);
+    checkoutButton.addEventListener("click", initiateCheckout);
   }
 
   const emptyCartButton = document.getElementById("empty-cart-button");
@@ -78,94 +82,70 @@ document.addEventListener("DOMContentLoaded", () => {
     loginForm.addEventListener("submit", login);
   }
 
-  const cartContainer = document.querySelector(".cart-container");
-  const addAllButton = document.createElement("button");
-  addAllButton.textContent = "Add All to Cart";
-  cartContainer.appendChild(addAllButton);
-  addAllButton.addEventListener("click", () => {
-    products.forEach((product) => {
-      addToCart(product._id, product.price);
-      updateCartTotal();
-    });
-  });
+
+  const registerForm = document.getElementById("register-form");
+  if (registerForm) {
+    registerForm.addEventListener("submit", register);
+  }
+
+
 
   loginBtn.addEventListener("click", openLogin);
 
   const loginCloseBtn = document.querySelector(".close-login");
   loginCloseBtn.addEventListener("click", closeLogin);
 });
-
 async function fetchCurrentUser() {
-  const response = await fetch("http://localhost:8080/api/auth/currentUser");
-  if (response.ok) {
-    const user = await response.json();
-    return user;
-  } else {
-    console.error("Failed to fetch current user:", response.statusText);
+  try {
+    const response = await fetch("http://localhost:8080/api/users/current", {
+      method: "GET",
+      credentials: "include", // Include cookies
+    });
+
+    if (response.ok) {
+      const user = await response.json();
+      return user;
+    } else {
+      console.error("Failed to fetch current user:", response.statusText);
+      return null;
+    }
+  } catch (error) {
+    console.error("Error fetching current user:", error);
     return null;
   }
 }
-async function checkout() {
-  const total = Object.values(cart).reduce((sum, product) => sum + product.price * product.quantity, 0);
-
-  if (total > currentUser.credits) {
-    alert("Insufficient credits!");
+async function initiateCheckout() {
+  fetch('/api/create-checkout-session', {
+    method: 'POST',
+    credentials: 'include'
+  })
+  .then(response => response.json())
+  .then(data => {
+    // Redirect to Stripe Checkout
+    return stripe.redirectToCheckout({ sessionId: data.id });
+  })
+  .then(result => {
+    if (result.error) {
+      alert(result.error.message);
+    }
+  })
+  .catch(error => console.error('Error:', error));
+}
+async function displayUserAvatar() {
+  const currentUser = await fetchCurrentUser();
+  if (!currentUser || !currentUser.firstname) {
+    console.error('User data is missing or invalid');
     return;
   }
 
-  const productIds = Object.keys(cart);
+  const userAvatarDisplay = document.getElementById("user-avatar-display");
+  const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.firstname)}+${encodeURIComponent(currentUser.lastname)}`;
 
-  try {
-    const response = await fetch("http://localhost:8080/api/users/purchase-product", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        userId: currentUser._id,
-        productIds: productIds,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    currentUser.credits = data.user.credits;
-    cart = {};
-    localStorage.removeItem("cart");
-    updateCartDisplay();
-    displayUserInfo();
-    alert("Purchase successful!");
-    displayProducts(products);
-  } catch (error) {
-    console.error("Error during purchase:", error);
-    alert("Purchase failed!");
-    displayProducts(products);
-  }
+  userAvatarDisplay.innerHTML = `
+    <img src="${avatarUrl}" alt="${currentUser.firstname}'s avatar" />
+  `;
 }
 
-
-/*async function displayUserAvatar() {
-if (!user || !user.firstname) {
-        console.error('User data is missing or invalid');
-        return;
-    }
-     document.getElementById('user-avatar-display').innerHTML = `
-        <img src="${user.avatarUrl}" alt="${user.firstname}'s avatar" />
-    `;
-  const userAvatarDisplay = document.getElementById("user-avatar-display");
-  const currentUser = await fetchCurrentUser();
-  
-  const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.firstname)}+${encodeURIComponent(currentUser.lastname)}`;
-    
-  const img = document.createElement('img');
-  img.src = avatarUrl;  
-  userAvatarDisplay.appendChild(img);
-}*/
 async function fetchProducts() {
   try {
     const response = await fetch("http://localhost:8080/api/products");
@@ -183,7 +163,6 @@ async function fetchProducts() {
     console.error("Error fetching products:", error);
   }
 }
-
 function displayProducts(products) {
   const gridContainer = document.querySelector(".grid-container");
   gridContainer.innerHTML = "";
@@ -191,11 +170,25 @@ function displayProducts(products) {
   products.forEach((product) => {
     const gridItem = document.createElement("div");
     gridItem.classList.add("grid-item", "grid-item-xl");
-    gridItem.setAttribute("data-product-id", product._id);
+    gridItem.setAttribute("data-product-id", product.product_id);
+
+    // Create image slider
+    let imageSlider = '<div class="image-slider">';
+    if (product.images && Array.isArray(product.images) && product.images.length > 0) {
+      product.images.forEach((img, index) => {
+        imageSlider += `<img src="${img}" alt="${product.name} - Image ${index + 1}" ${index === 0 ? 'class="active"' : ''}>`;
+      });
+    } else if (product.image_url) {
+      imageSlider += `<img src="${product.image_url}" alt="${product.name}" class="active">`;
+    } else {
+      imageSlider += '<img src="/images/default-product-image.jpg" alt="Default Image" class="active">';
+    }
+    imageSlider += '</div>';
+
     gridItem.innerHTML = `
-      <img src="${product.images[0].url}" alt="${product.name}">
+      ${imageSlider}
       <div class="overlay">
-        ${product.name} - <span class="price-span">SilkyDinars:${product.price} - Q:${productStocks[product._id]}</span>
+        ${product.name} - <span class="price-span">Dinars:${product.price} - Q:${product.stock}</span>
       </div>
     `;
     const addToCartButton = document.createElement("button");
@@ -203,40 +196,207 @@ function displayProducts(products) {
     gridItem.appendChild(addToCartButton);
     gridContainer.appendChild(gridItem);
   });
+// Add event listeners for add to cart buttons
+document.querySelectorAll(".add-to-cart-btn").forEach((button) => {
+  button.addEventListener("click", (event) => {
+    const productId = event.target.closest('.grid-item').getAttribute("data-product-id");
+    console.log("Add to cart clicked for product ID:", productId); // Debug log
+    addToCart(productId);
+  });
+});
+  // Add event listeners for image slider
+  document.querySelectorAll('.image-slider').forEach(slider => {
+    const images = slider.querySelectorAll('img');
+    let currentIndex = 0;
+
+    setInterval(() => {
+      images[currentIndex].classList.remove('active');
+      currentIndex = (currentIndex + 1) % images.length;
+      images[currentIndex].classList.add('active');
+    }, 3000); // Change image every 3 seconds
+  });
 
   document.querySelectorAll(".grid-item button").forEach((button) => {
     button.addEventListener("click", () => {
       const productId = button.parentElement.getAttribute("data-product-id");
       addToCart(productId);
       updateCartDisplay();
-      updateCartTotal();
     });
   });
 }
+/*function addToCart(productId) {
+  console.log("Adding to cart, product ID:", productId);
 
-function addToCart(productId) {
-  const product = products.find((p) => p._id === productId);
-  if (!product) {
-    console.error("Product not found");
-    return;
-  }
-  if (productStocks[productId] < 1) {
-    alert("Product is out of stock");
-    return;
-  }
+  fetch('http://localhost:8080/api/cart/add', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ 
+      productId: productId,
+      quantity: 1 
+    }),
+    credentials: 'include'
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('Failed to add to cart');
+    }
+    return response.json();
+  })
+  .then(data => {
+    console.log("Add to cart successful, response:", data);
+    updateCartDisplay();  // Call this function to update the cart display
+    // Show success message
+    const message = document.createElement('div');
+    message.textContent = 'Added to cart!';
+    message.className = 'success-message';
+    document.body.appendChild(message);
+    setTimeout(() => message.remove(), 2000);
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    // Show error message
+    const message = document.createElement('div');
+    message.textContent = 'Failed to add to cart';
+    message.className = 'error-message';
+    document.body.appendChild(message);
+    setTimeout(() => message.remove(), 2000);
+  });
+}
+*/
+async function addToCart(productId) {
+  // ...
 
-  if (!cart[productId]) {
-    cart[productId] = { ...product, quantity: 0 };
-  }
-  cart[productId].quantity++;
-  productStocks[productId]--;
+  fetch('http://localhost:8080/api/cart/add', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ 
+      productId: productId,
+      quantity: 1 
+    }),
+    credentials: 'include'
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('Failed to add to cart');
+    }
+    return response.json();
+  })
+  .then(data => {
+    console.log("Add to cart successful, response:", data);
+    updateCartDisplay();  // Call this function to update the cart display
+    // Show success message
+    const message = document.createElement('div');
+    message.textContent = 'Added to cart!';
+    message.className = 'success-message';
+    document.body.appendChild(message);
+    setTimeout(() => message.remove(), 2000);
 
-  localStorage.setItem("cart", JSON.stringify(cart));
-  updateCartDisplay();
-  displayProducts(products);
-  updateCartTotal();
+    // Place the order and adjust the product stock
+    placeOrder();
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    // Show error message
+    const message = document.createElement('div');
+    message.textContent = 'Failed to add to cart';
+    message.className = 'error-message';
+    document.body.appendChild(message);
+    setTimeout(() => message.remove(), 2000);
+  });
 }
 
+async function placeOrder() {
+  const cart = await fetchCart();
+
+  if (!cart || !cart.items || cart.items.length === 0) {
+    console.error('No items in the cart');
+    return;
+  }
+
+  const orderData = {
+    userId: 1, // Replace with the actual user ID
+    totalAmount: cart.total,
+    items: cart.items.map(item => ({
+      productId: item.product_id,
+      quantity: item.quantity,
+      price: item.price,
+    })),
+  };
+
+  try {
+    const response = await fetch('http://localhost:8080/api/orders/place', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(orderData),
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to place order');
+    }
+
+    const data = await response.json();
+    console.log("Order placed successfully, response:", data);
+
+    // Adjust product stock
+    adjustProductStock(cart.items);
+
+    // Clear the cart
+    cart = {};
+    localStorage.removeItem("cart");
+    updateCartDisplay();
+    displayProducts(products);
+
+    // Show success message
+    const message = document.createElement('div');
+    message.textContent = 'Order placed successfully!';
+    message.className = 'success-message';
+    document.body.appendChild(message);
+    setTimeout(() => message.remove(), 2000);
+  } catch (error) {
+    console.error('Error:', error);
+    // Show error message
+    const message = document.createElement('div');
+    message.textContent = 'Failed to place order';
+    message.className = 'error-message';
+    document.body.appendChild(message);
+    setTimeout(() => message.remove(), 2000);
+  }
+}
+
+async function adjustProductStock(cartItems) {
+  const stockAdjustments = cartItems.map(item => ({
+    productId: item.product_id,
+    adjustment: -item.quantity,
+  }));
+
+  try {
+    const response = await fetch('http://localhost:8080/api/products/adjust-stock', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(stockAdjustments),
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to adjust product stock');
+    }
+
+    const data = await response.json();
+    console.log("Product stock adjusted successfully, response:", data);
+  } catch (error) {
+    console.error('Error:', error);
+    // Handle error (e.g., display error message to the user)
+  }
+}
 function setupCart() {
   const savedCart = localStorage.getItem("cart");
   if (savedCart) {
@@ -244,33 +404,112 @@ function setupCart() {
   }
   updateCartDisplay();
 }
-
 function updateCartDisplay() {
-  const cartItems = document.getElementById("cart-items");
-  cartItems.innerHTML = "";
-  for (let itemId in cart) {
-    const item = cart[itemId];
-    const listItem = document.createElement("li");
-    listItem.textContent = `Name: ${item.name}, Price: $${item.price}, Quantity: ${item.quantity}`;
-    cartItems.appendChild(listItem);
-  }
-  const cartContainer = document.querySelector(".cart-container");
-  if (Object.keys(cart).length > 0) {
-    cartContainer.style.zIndex = 3;
-    cartContainer.style.opacity = 1;
-  } else {
-    cartContainer.style.zIndex = -8;
-    cartContainer.style.opacity = 0;
-  }
+  fetch('http://localhost:8080/api/cart', {
+    credentials: 'include'
+  })
+  .then(response => response.json())
+  .then(data => {
+    const cartContainer = document.getElementById('cart-items');
+    const cartTotal = document.getElementById('cart-total');
+    cartContainer.innerHTML = '';
+
+    if (!data.cart || !data.cart.items || data.cart.items.length === 0) {
+      cartContainer.innerHTML = '<li>Your cart is empty</li>';
+      cartTotal.textContent = 'Total: 0';
+      return;
+    }
+
+    let total = 0;
+    data.cart.items.forEach(item => {
+      const listItem = document.createElement('li');
+      listItem.className = 'cart-item';
+
+      // Handle image URL
+      let imageUrl = '/images/1.jpg'; // Default image
+      if (item.images && Array.isArray(item.images) && item.images.length > 0) {
+        imageUrl = item.images[0];
+      } else if (item.image_url) {
+        imageUrl = item.image_url;
+      }
+
+      let productName = item.name || 'Unknown Product';
+      let productPrice = item.price || 0;
+      let productId = item.product_id || '';
+      listItem.innerHTML = `
+        <img src="${imageUrl}" alt="${productName}" class="cart-item-image">
+        <div class="cart-item-details">
+          <span class="item-name">${productName}</span>
+          <span class="item-price">Dinars: ${parseFloat(productPrice).toFixed(2)}</span>
+          <span class="item-quantity">Quantity: ${item.quantity}</span>
+        </div>
+        <div class="cart-item-controls">
+          <button class="quantity-btn minus" data-id="${productId}">-</button>
+          <button class="quantity-btn plus" data-id="${productId}">+</button>
+          <button class="remove-btn" data-id="${productId}">Remove</button>
+        </div>
+      `;
+
+      cartContainer.appendChild(listItem);
+      total += productPrice * item.quantity;
+    });
+
+    cartTotal.textContent = `Total: ${total.toFixed(2)}`;
+
+    // Add event listeners for quantity buttons and remove buttons
+    document.querySelectorAll('.quantity-btn').forEach(btn => {
+      btn.addEventListener('click', function() {
+        const productId = this.getAttribute('data-id');
+        const isIncrement = this.classList.contains('plus');
+        updateCartItemQuantity(productId, isIncrement);
+      });
+    });
+
+    document.querySelectorAll('.remove-btn').forEach(btn => {
+      btn.addEventListener('click', function() {
+        const productId = this.getAttribute('data-id');
+        removeFromCart(productId);
+      });
+    });
+  })
+  .catch(error => {
+    console.error('Error updating cart display:', error);
+    const cartContainer = document.getElementById('cart-items');
+    cartContainer.innerHTML = '<li>Error loading cart</li>';
+  });
 }
 
-
-
-function updateCartTotal() {
-  const total = Object.values(cart).reduce((sum, product) => sum + product.price * product.quantity, 0);
-  document.getElementById("cart-total").textContent = "Total: " + total.toFixed(2);
+function updateCartItem(productId, quantity) {
+  fetch('http://localhost:8080/api/cart/update', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ productId, quantity }),
+    credentials: 'include'
+  })
+  .then(response => response.json())
+  .then(data => {
+    updateCartDisplay();
+  })
+  .catch(error => console.error('Error:', error));
 }
 
+function removeFromCart(productId) {
+  fetch('http://localhost:8080/api/cart/remove', {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ productId }),
+    credentials: 'include'
+  })
+  .then(response => response.json())
+  .then(data => {
+    updateCartDisplay();
+  })
+  .catch(error => console.error('Error:', error));
+}
 async function login(event) {
   event.preventDefault();
 
@@ -303,39 +542,6 @@ async function login(event) {
     document.getElementById("login-status").textContent = "Error: " + error.message;
   }
 }
-
-
-/*async function login(event) {
-  event.preventDefault();
-
-  const email = document.getElementById("email").value;
-  const password = document.getElementById("password").value;
-
-  try {
-    const response = await fetch("http://localhost:8080/api/auth/login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ email, password }),
-    });
-
-    const data = await response.json();
-    if (response.ok) {
-      // Store session information in localStorage
-      localStorage.setItem("currentUser", JSON.stringify(data.user));
-      document.getElementById("login-status").textContent = "Login successful!";
-      displayUserInfo(); // Refresh user info on UI
-      window.location.reload(); // Optionally reload the page
-    } else {
-      document.getElementById("login-status").textContent =
-        "Login failed: " + data.message;
-    }
-  } catch (error) {
-    document.getElementById("login-status").textContent =
-      "Error: " + error.message;
-  }
-}*/
 async function register(event) {
   event.preventDefault();
 
@@ -373,50 +579,6 @@ async function register(event) {
     document.getElementById("register-status").textContent = "Error: " + error.message;
   }
 }
-
-
-/*async function register(event) {
-  event.preventDefault();
-
-  const username = document.getElementById("username").value; // Add username field//+
-  const firstname = document.getElementById("firstname").value;
-  const lastname = document.getElementById("lastname").value;
-  const email = document.getElementById("reg-email").value;
-  const password = document.getElementById("reg-password").value;
-  const address = document.getElementById("address").value;//-
-  // const address = document.getElementById("address").value; // Remove if not needed//+
-
-  try {
-    const response = await fetch("http://localhost:8080/api/auth/register", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    
-      body: JSON.stringify({ username, firstname, lastname, email, password }),//+
-    });
-
-    const data = await response.json();
-    if (response.ok) {
-      document.getElementById("register-status").textContent =//-
-        "Registration successful!";//-
-      document.getElementById("register-status").textContent = "Registration successful!";//+
-      // You might want to do something with the returned user data here//+
-      // For example, set up a user session or update UI//+
-      window.location.href = "index.html"; // Redirect on success
-    } else {
-      document.getElementById("register-status").textContent =//-
-        "Registration failed: " + data.message;//-
-      document.getElementById("register-status").textContent = "Registration failed: " + data.message;//+
-    }
-  } catch (error) {
-    document.getElementById("register-status").textContent =//-
-      "Error: " + error.message;//-
-    document.getElementById("register-status").textContent = "Error: " + error.message;//+
-  }
-}
-*/
-
 async function logout() {
   try {
     const response = await fetch("http://localhost:8080/api/auth/logout", {
@@ -433,10 +595,6 @@ async function logout() {
     console.error("Error logging out:", error);
   }
 }
-
-
-
-
 async function displayUserInfo() {
   const userInfoDisplay = document.getElementById("user-info-display");
   const currentUser = await fetchCurrentUser();
@@ -447,12 +605,27 @@ async function displayUserInfo() {
     userInfoDisplay.textContent = "Not logged in";
   }
 }
-
-
 function emptyCart() {
   cart = {};
   localStorage.removeItem("cart");
   updateCartDisplay();
-  updateCartTotal();
-  displayProducts(products);
+    displayProducts(products);
+}
+
+function initiateCheckout() {
+  fetch('/api/create-checkout-session', {
+    method: 'POST',
+    credentials: 'include'
+  })
+  .then(response => response.json())
+  .then(data => {
+    // Redirect to Stripe Checkout
+    return stripe.redirectToCheckout({ sessionId: data.id });
+  })
+  .then(result => {
+    if (result.error) {
+      alert(result.error.message);
+    }
+  })
+  .catch(error => console.error('Error:', error));
 }

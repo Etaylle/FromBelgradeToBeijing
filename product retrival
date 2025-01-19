@@ -1,0 +1,7 @@
+// When sending product data
+// When sending product data
+products = products.map(product => ({
+  ...product,
+  image_url: product.image_url ? `/images/${product.image_url}` : null,
+  images: product.images ? product.images.map(img => `/images/${img}`) : []
+}));

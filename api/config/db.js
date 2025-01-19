@@ -1,6 +1,10 @@
 require("dotenv").config();
 const { Sequelize } = require("sequelize");
 
+/*const [results, metadata] = await sequelize.query('CALL get_cart_details(:p_user_id)', {
+  replacements: { p_user_id: userId },
+});*/
+
 
 // Create a Sequelize instance for MySQL connection
 const sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASSWORD, {
@@ -25,6 +29,17 @@ const connectDB = async () => {
     console.error("Unable to connect to the database:", error);
   }
 };
+// Add a method to call stored procedures
+const callProcedure = async (procedureName, params = {}) => {
+  try {
+    const [results] = await sequelize.query(`CALL ${procedureName}(:${Object.keys(params).join(", :")})`, {
+      replacements: params,
+    });
+    return results;
+  } catch (error) {
+    console.error(`Error executing procedure ${procedureName}:`, error);
+  }
+};
 
 // Export the sequelize instance and the connectDB function
-module.exports = { sequelize, connectDB };
+module.exports = { sequelize, connectDB, callProcedure };

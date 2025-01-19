@@ -1,0 +1,19 @@
+'use strict';
+
+module.exports = {
+  up: async (queryInterface, Sequelize) => {
+    await queryInterface.changeColumn('Products', 'product_id', {
+      type: Sequelize.UUID,
+      defaultValue: Sequelize.UUIDV4,
+      allowNull: false,
+    });
+  },
+
+  down: async (queryInterface, Sequelize) => {
+    await queryInterface.changeColumn('Products', 'product_id', {
+      type: Sequelize.INTEGER,
+      autoIncrement: true,
+      allowNull: false,
+    });
+  }
+};

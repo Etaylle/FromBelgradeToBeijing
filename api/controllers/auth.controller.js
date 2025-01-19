@@ -25,12 +25,12 @@ const createUser = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = await User.create({
       username,
-      email,
       password_hash: hashedPassword,
+      email,
+      role: 'customer', // Default role
       firstname,
       lastname,
       credits: 0, // Default credits
-      role: 'customer', // Default role
     });
 
     // Respond with success
@@ -99,6 +99,5 @@ const logoutUser = (req, res) => {
 module.exports = {  
   createUser,
   loginUser,
-  authenticateSession,
   logoutUser,
 };
